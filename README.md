@@ -1,5 +1,5 @@
 # vaiana
-Code source Vaiana / Moana
+Code source Vaiana / Moana (gestion des déplacments dans une map (mobile/desktop))
 
 ````js
 // 2. This code loads the IFrame Player API code asynchronously.
