@@ -1,5 +1,5 @@
-# vaiana
-Code source Vaiana / Moana (gestion des déplacments dans une map (mobile/desktop))
+### vaiana
+# Code source Vaiana / Moana (gestion des déplacments dans une map (mobile/desktop))
 
 ````js
 // 2. This code loads the IFrame Player API code asynchronously.
@@ -1408,11 +1408,12 @@ Code source Vaiana / Moana (gestion des déplacments dans une map (mobile/deskto
        window.moana = null;
     // end closure
     })();
-```
+````
 
 
-Code Source Dev player spécifique (not in production)
-```js
+# Code Source Dev player spécifique (not in production)
+
+````js
 var playlistURLs = [],
         urlspotify = window.urlspt, // utilise dans BTS pour lancer les playlists 
         lang = window.lang,
@@ -1823,4 +1824,4 @@ var playlistURLs = [],
         },
        
         // ^ fin gestion album et slider ----------------------------------------------------------------------------------------------------
-        ```
+        ````
