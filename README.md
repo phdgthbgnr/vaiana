@@ -1408,4 +1408,419 @@ Code source Vaiana / Moana (gestion des déplacments dans une map (mobile/deskto
        window.moana = null;
     // end closure
     })();
-    ```
+```
+
+
+Code Source Dev player spécifique (not in production)
+```js
+var playlistURLs = [],
+        urlspotify = window.urlspt, // utilise dans BTS pour lancer les playlists 
+        lang = window.lang,
+        request = false,
+        autoplay = true,        // joue toutes les pistes automatiquement
+        curTracks = 0,          // piste en cours de lecture (numero de piste)
+        totTracks = 0,          // total des pistes en cours de lecture (nombre total de pistes)
+        curSongId = 0,          // id de la piste en cours
+        audioTag,
+        albums = window.albums,     
+        assets = window.assets,
+        token = window.token,
+        lang,
+        tmap,               // twomaps
+        map1,               // mapa   
+        map2,               // mapb
+        hmap = 1.0,         // scale
+        initmouseX = 0,     // mouseX on mousedown
+        initmouseY = 0,     // mouseY on mousedown
+        offsetx = 0,        // translate x
+        offsety = 0,        // translate y
+        oldoffsetx = 0,     // translate x on mouseup
+        oldoffsety = 0,     // translate y on mouseup
+        xmap2 = 2235,       // taille de la double map divisee par 2 : 4470 / 2
+        diffx = 0,          // ecart pinch horizontal
+        diffy = 0,          // ecart pinch vertival
+        zmax = 1.4,         // zoom max
+        zmin = .8,          // zoom min
+        _timer,             // setInterval pour duree min video
+        //poster = '',        // image de poster de la playlist album
+        curbtsimg = 0,
+        mapenable = true,
+            
+        $ID = function(id){
+            var elem = null;
+            if (document.getElementById(id) !== null) elem = document.getElementById(id);
+            if(elem == null) console.log('%cERREUR : id "' + id + '" introuvable','color:#ff1d00;font-weight:bold');
+            return elem;
+        },
+            
+        addAclass = function (id, classe){
+            $ID(id).classList ? $ID(id).classList.add(classe) : $ID(id).className += ' '+classe;
+        },
+
+        removeAclass = function(id,classe){
+            $ID(id).className = $ID(id).className.replace(' ' + classe, '').replace(classe, '');
+        },
+
+        hasAclass = function(id, cls) {
+            var element = $ID(id);
+            return (' ' + element.className + ' ').indexOf(' ' + cls + ' ') > -1;
+        },
+           
+        
+        // gestion album et slider ----------------------------------------------------------------------------------------------------
+           
+        slider = {
+            'touchstarty':0,    // coord touchstart Y
+            'boundlist':{},     // getBoundingClientRect() de liste
+            'contH':0,          // hauteur du conteneur de la liste
+            'lsty':0,           // coord Y de la liste
+            'lstH':0,           // hauteur de la liste
+            'gutY':0,           // coord Y du gutter    --> ascenceur
+            'gutH':0,           // hauteur du gutter    --> ascenceur
+            'slY':0,            // coord Y slider       --> ascenceur
+            'slH':0,            // hauteur du slider    --> ascenceur
+            'ulY':0,            // coord Y ul à slider
+            'ulH':0,            // hauteur ul à slider
+            'offY':0,           // unite decalage Y ul à slider
+            'lineH':0,          // hauteur li (== offY)
+            'offYd':0 ,         // division hauteur ul à slider
+            'deltalist':0       // difference entre ulH - contH
+        },
+            
+        initSlider = function(){
+            if($ID('sliding') !== null){
+                var n = $ID('sliding').childNodes.length;
+                slider.contH        = $ID('liste').offsetHeight;
+                slider.lstH         = $ID('liste').childNodes[0].offsetHeight;
+                slider.gutH         = $ID('gutter').offsetHeight;
+                slider.ulY          = $ID('sliding').offsetTop;
+                slider.ulH          = $ID('sliding').offsetHeight;
+                slider.lineH        = $ID('sliding').childNodes[0].offsetHeight;
+                slider.offY         = slider.ulH/n;
+                slider.boundlist    = $ID('liste').getBoundingClientRect(); 
+                slider.offYd        = slider.offY/2;
+                slider.deltalist    = slider.ulH-slider.contH;
+                slider.slH          = slider.deltalist;
+                
+                $ID('sliding').style.transform = 'translate(0px,' + slider.ulY + 'px)';
+                $ID('slider').style.transform = 'translate(0px,' + slider.ulY + 'px)';
+                // ie 9
+                $ID('sliding').style.msTransform = 'translate(0px,' + slider.ulY + 'px)';
+                $ID('slider').style.msTransform = 'translate(0px,' + slider.ulY + 'px)';
+                
+                //console.log(slider);
+                $ID('slider').style.height = (slider.gutH-slider.slH)+'px';
+                if(slider.deltalist <= 0) {
+                    addAclass('gutter','novisible');
+                }else{
+                    removeAclass('gutter','novisible');
+                }
+                
+                if(slider.contH < slider.lstH){
+                    manageEvents.listenerAdd('liste','touchstart',slidetouchstart,false);
+                    manageEvents.listenerAdd('liste','mousewheel',slidewheelMouse,true);
+                    manageEvents.listenerAdd('liste','DOMMouseScroll',slidewheelMouse,true);
+                    manageEvents.listenerAdd('liste','wheel',slidewheelMouse,true);
+                    removeAclass('gutter','novisible');
+                }else{
+                    manageEvents.listenerRemove('liste','touchstart');
+                    manageEvents.listenerRemove('liste','mousewheel');
+                    manageEvents.listenerRemove('liste','DOMMouseScroll');
+                    manageEvents.listenerRemove('liste','wheel');
+                    if(!hasAclass('gutter','novisible')) addAclass('gutter','novisible');
+                }
+            }
+            
+        },
+           
+        getRefOnSPTF = function(url, datas, callback, id, autoplay){
+             manageEvents.promises.httpRequest(url,'POST', datas, 10000).then(function(e){
+                try{
+                    var myjson = JSON.parse(e);
+                }catch(e){
+                    var myjson = '';
+                }
+                 
+                 if(typeof myjson === 'object'){
+                     for(var i = 0; i < albums.length; i++){
+                        if(albums[i].hasOwnProperty(id)) {
+                           if(Object.keys(albums[i][id]).length === 0) albums[i][id] = myjson;
+                        }
+                     }
+                     callback(myjson,id);
+                     if(autoplay){   
+                         if(myjson.tracks){
+                            var track = myjson.tracks.items[0];
+                            audioTag.src = track.preview_url;
+                            audioTag.play();
+                        }
+                    }
+                 }
+                 
+                 manageEvents.promises.request = false;
+                 request = false;
+                 
+            }).fail(function(error){
+              console.log(error);
+              console('erreur');
+              request = false;
+            }).progress(function(progress){
+                console.log(Math.round(progress*100) + ' %');
+            }).fin(function(){  // finally don't work on ie8 (ES5)
+              console.log('fin');
+              request = false;
+            });   
+        },
+           
+        albumIsLoaded = function(id){
+            var rt = false;
+            for(var i = 0; i<albums.length; i++){
+                if(albums[i].hasOwnProperty(id)){
+                    if(Object.keys(albums[i][id]).length !== 0) rt = albums[i][id];
+                    //if (albums[i][id].length == 0) rt = albums[i][id];
+                }
+            }
+            return rt;
+        },
+        
+        getPoster = function (id){
+            var rt = 'posterblnk.gif';
+            for(var i = 0; i<albums.length; i++){
+                if(albums[i].hasOwnProperty(id)){
+                    rt = albums[i]['poster'];
+                }
+            }
+            return rt;
+        },
+        
+        audioEnded = function(e ,t, ct){
+            if(autoplay){
+                curTracks ++;
+                if(curTracks < totTracks){
+                    var id = audioTag.getAttribute('data-currentId');
+                    var datas = albumIsLoaded(id);
+                    audioTag.pause();
+                    audioTag.src = datas.tracks.items[curTracks].preview_url;
+                    curSongId = 'tr-' + datas.tracks.items[curTracks].id; 
+                    var newt = $ID('sliding').childNodes[curTracks].childNodes[0].getAttribute('id');
+                    var oldt = $ID('sliding').childNodes[curTracks-1].childNodes[0].getAttribute('id');
+                    removeAclass(oldt,'currenttrack');
+                    addAclass(newt,'currenttrack');
+                    audioTag.play();
+                }
+                if(curTracks == totTracks){
+                    var lastt = $ID('sliding').childNodes[totTracks-1].childNodes[0].getAttribute('id');
+                    removeAclass(lastt,'currenttrack');
+                    manageEvents.listenerRemove('audio','ended',audioEnded);
+                }
+            }else{
+                manageEvents.listenerRemove('audio','ended',audioEnded);
+                removeAclass(curSongId,'currenttrack');
+            }
+        },
+        
+        //getAlbum = function(e,t){
+        getAlbum = function(id){
+            //var id = t.getAttribute('data-album');
+            var datas = albumIsLoaded(id);
+            audioTag.setAttribute('data-currentId',id);
+            if( datas == false){
+                var datas = 'action=playlist&url=https://api.spotify.com/v1/albums/' + id + '&token='+token;
+                if(request === false){
+                    request = true;
+                    getRefOnSPTF('_ajax/moanajax.php', datas, displayAlbum, id, autoplay);
+                }
+            }else{
+                displayAlbum(datas,id);
+            }
+            
+            //var audio = document.getElementById('audio');
+            /*
+            getRefOnSPTF('_ajax/ajax.php', datas, function(){
+                // var audio = document.getElementById('audio');
+                // audio.play();
+            });
+            */
+            //if(autoplay) audioTag.play();
+            return false;
+        },
+        
+        playTrack = function(e,t,ct){
+            autoplay = false;
+            manageEvents.listenerRemove('audio','ended',audioEnded);
+            var urltrack = t.getAttribute('data-track');
+            var id = t.getAttribute('id');
+            // reinit toutes les pistes
+            for( var i=0; i < t.parentNode.parentNode.childNodes.length; i++){
+                var a =  t.parentNode.parentNode.childNodes[i].childNodes[0].getAttribute('id');
+                if(hasAclass(a,'currenttrack')) removeAclass(a,'currenttrack');
+            }
+            if(id == curSongId){ // && hasAclass(id,'currenttrack')
+                curSongId = 0;
+                removeAclass(id,'currenttrack');
+                audioTag.pause();
+                audioTag.currentTime = 0;
+            }else{
+                addAclass(id,'currenttrack');
+                curSongId = id;
+                audioTag.src = urltrack;
+                audioTag.play();
+            }
+            return false;
+        },
+        
+        displayAlbum = function(data,id){
+            
+            var imgposter = getPoster(id);
+            $ID('posters').src = '_img/' + lang + '/posters/'+imgposter;
+            
+            if(data.tracks.items){
+                var elems = '';
+                curTracks = 0;
+                totTracks = data.tracks.items.length;
+                //var imageurl = data.images[(data.images.length-1)];
+                var imageurl = data.images[1].url;
+                var frstid = 'tr-' + data.tracks.items[0].id;
+                for(var i=0; i<totTracks;i++){
+                    var item = data.tracks.items[i];
+                    var ms = item.duration_ms;
+                    var min = Math.round((ms/1000/60) << 0);
+                    var sec = Math.round((ms/1000) % 60);
+                    //var secd = Math.round(sec);
+                    sec = sec < 10 ? sec+'0' : sec;
+                    var duree = min+':'+ sec;
+                    //var namestr = item.name.replace(/\s/g, "&nbsp;");
+                    //namestr = namestr.replace(/-/g, '-&#8288;');
+                    var namestr = item.name.replace(/-/g, '-&#8288;');
+                    elems += '<li><a href="#' + item.id +'" data-track="' + item.preview_url + '" id="tr-' + item.id + '" class="track"><span class="icons"><img src="_img/icon_blk.gif"/></span><span class="numtr">' + item.track_number + '</span><span class="nametr">' + namestr + '</span><span class="artisttr">' + item.artists[0].name + '</span><span class="dureetr">' + duree + '</span></a></li>';
+                }
+                var cont = $ID('album');
+                cont.innerHTML = '';
+                cont.innerHTML = '<div class="header"><div class="headimg"><img src="' + imageurl+ '" width="300" height="300"/></div><div class="titre">' + data.name + '</div></div>'; 
+                cont.innerHTML += '<div class="liste" id="liste"><ul id="sliding">'+ elems + '</ul><div id="gutter" class="gutter novisible"><div class="slider" id="slider"></div></div></div>';
+                
+                for(var i=0; i<data.tracks.items.length;i++){
+                    var item = data.tracks.items[i];
+                    manageEvents.listenerAdd('tr-'+item.id,'click',playTrack,true);
+                }
+            
+                                    
+                if(autoplay){
+                    if($ID('sliding') !== null) totTracks = $ID('sliding').childNodes.length;
+                    curSongId = frstid; 
+                    manageEvents.listenerAdd('audio','ended',audioEnded,false);
+                }
+                
+                var track = data.tracks.items[0];
+                var frstid = $ID('sliding').childNodes[0].childNodes[0].getAttribute('id');
+                addAclass(frstid,'currenttrack');
+                audioTag.src = track.preview_url;
+                if(autoplay) audioTag.play();
+                // reinit le Slider apres 1 seconde
+                var testHeight = setTimeout(function(){
+                    
+                    initSlider();
+                    
+                    
+                }, 600);
+                
+            }
+            
+        },
+        
+        slidetouchstart = function(e, t, ct){
+            slider.touchstarty = e.touches[0].clientY;
+            manageEvents.listenerAdd('liste','touchmove',slidetouchmove,true);
+            manageEvents.listenerAdd('liste','touchend',slidetouchend,false);
+            manageEvents.listenerAdd('liste','touchleave',slidetouchend,false);
+            return false;
+        },
+            
+        slidetouchmove = function(e, t, ct){
+            var ytop = $ID('sliding').getBoundingClientRect().top;
+            var ybott = $ID('sliding').getBoundingClientRect().bottom;
+            
+            /*
+            if(ybott > slider.boundlist.bottom){
+                $ID('sliding').style.transform = 'translate(0px,' + slider.ulY + 'px)'
+            }
+            */
+            
+            if(e.touches[0].clientY < slider.touchstarty && ybott > slider.boundlist.bottom) {
+                slider.ulY -= slider.offYd;
+                $ID('sliding').style.transform = 'translate(0px,' + slider.ulY + 'px)';
+                $ID('slider').style.transform = 'translate(0px,' + -slider.ulY + 'px)';
+            }
+            
+            if(e.touches[0].clientY > slider.touchstarty && ytop < slider.boundlist.top) {
+                slider.ulY += slider.offYd;
+                $ID('sliding').style.transform = 'translate(0px,' + slider.ulY + 'px)';
+                $ID('slider').style.transform = 'translate(0px,' + -slider.ulY + 'px)';
+            }
+            
+            if(ytop > slider.boundlist.top){
+                slider.ulY = 0;
+                $ID('sliding').style.transform = 'translate(0px,' + slider.ulY + 'px)';
+                $ID('slider').style.transform = 'translate(0px,' + -slider.ulY + 'px)';
+            }
+            
+            slider.touchstarty = e.touches[0].clientY;
+
+            return false;
+        },
+            
+        slidetouchend = function(e, t, ct){
+            manageEvents.listenerRemove('liste','touchmove');
+            manageEvents.listenerRemove('liste','touchend');
+            manageEvents.listenerRemove('liste','touchleave');
+        },
+            
+        slidewheelMouse = function(e, t, ct){
+                //var delta = Math.max(-1, Math.min(1, (e.wheelDelta || -e.detail)));
+            var delta = Math.max(-1, Math.min(1, e.deltaY));
+            var ytop = $ID('sliding').getBoundingClientRect().top;
+            var ybott = $ID('sliding').getBoundingClientRect().bottom;
+            
+            if(delta == -1 && ytop > slider.boundlist.top){
+                slider.ulY = 0;
+                $ID('sliding').style.transform = 'translate(0px,' + slider.ulY + 'px)';
+                $ID('slider').style.transform = 'translate(0px,' + -slider.ulY + 'px)';
+                // ie 9
+                $ID('sliding').style.msTransform = 'translate(0px,' + slider.ulY + 'px)';
+                $ID('slider').style.msTransform = 'translate(0px,' + -slider.ulY + 'px)';
+                return false;
+            }
+                
+            if(delta == 1 && ybott <= slider.boundlist.bottom-slider.offYd){
+                slider.ulY = -slider.deltalist;//slider.contH - slider.lstH;
+                $ID('sliding').style.transform = 'translate(0px,' + slider.ulY + 'px)';
+                $ID('slider').style.transform = 'translate(0px,' + -slider.ulY + 'px)';
+                // ie 9
+                $ID('sliding').style.msTransform = 'translate(0px,' + slider.ulY + 'px)';
+                $ID('slider').style.msTransform = 'translate(0px,' + -slider.ulY + 'px)';
+                return false;
+            }
+            
+            if(delta == 1 && ybott >= slider.boundlist.bottom) {
+                slider.ulY -= slider.offYd;
+                $ID('sliding').style.transform = 'translate(0px,' + slider.ulY + 'px)';
+                $ID('slider').style.transform = 'translate(0px,' + -slider.ulY + 'px)';
+                // ie 9
+                $ID('sliding').style.msTransform = 'translate(0px,' + slider.ulY + 'px)';
+                $ID('slider').style.msTransform = 'translate(0px,' + -slider.ulY + 'px)';
+            }
+            
+            if(delta == -1 && ytop < slider.boundlist.top) {
+                slider.ulY += slider.offYd;
+                $ID('sliding').style.transform = 'translate(0px,' + slider.ulY + 'px)';
+                $ID('slider').style.transform = 'translate(0px,' + -slider.ulY + 'px)';
+                // ie 9
+                $ID('sliding').style.msTransform = 'translate(0px,' + slider.ulY + 'px)';
+                $ID('slider').style.msTransform = 'translate(0px,' + -slider.ulY + 'px)';
+            }
+            
+            return false;
+        },
+       
+        // ^ fin gestion album et slider ----------------------------------------------------------------------------------------------------
+        ```
